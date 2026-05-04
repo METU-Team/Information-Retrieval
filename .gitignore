@@ -1,0 +1,20 @@
+# Python Virtual Environment
+.venv/
+
+# Python Cache Files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- DATA AND INDEX FILES ---
+
+# Embeddings Directory
+# (Ignores the massive faiss.index and passage_ids.npy files inside, 
+# but keeps the .gitkeep file so the folder structure is preserved on GitHub)
+embeddings/*
+!embeddings/.gitkeep
+
+# BM25 Index Directory
+# (Ignores the bm25_index directory and its contents, preserves .gitkeep)
+index/*
+!index/.gitkeep

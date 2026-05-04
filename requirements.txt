@@ -1,0 +1,9 @@
+python-terrier
+ir-datasets
+sentence-transformers
+faiss-cpu
+torch
+numpy
+pandas
+tqdm
+streamlit
