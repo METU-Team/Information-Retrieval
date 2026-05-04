@@ -8,7 +8,8 @@ FAISS_INDEX_PATH = os.path.join(EMBEDDINGS_DIR, "faiss.index")
 PASSAGE_IDS_PATH = os.path.join(EMBEDDINGS_DIR, "passage_ids.npy")
 
 # Dataset
-DATASET_NAME = "msmarco-passage/train/triples-small"   # small split for dev
+CORPUS_DATASET = "msmarco-passage"           # full passage collection
+EVAL_DATASET   = "msmarco-passage/dev/small" # standard eval split with qrels
 CORPUS_SUBSET_SIZE = 500_000   # number of passages to index (increase if you have resources)
 QUERIES_SUBSET_SIZE = 500      # number of queries for evaluation
 
