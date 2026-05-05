@@ -9,10 +9,10 @@ from src.config import INDEX_DIR, FAISS_INDEX_PATH
 if not pt.started():
     pt.init()
 
-# 1. Load data
+# 1. Load data (queries/qrels first so corpus can guarantee relevant docs)
 print("--- Phase 1: Loading Dataset ---")
-corpus_df = load_corpus()
 queries_df, qrels_df = load_queries_and_qrels()
+corpus_df = load_corpus(qrels_df=qrels_df)
 print(f"Corpus: {len(corpus_df)} passages | Queries: {len(queries_df)} | Qrels: {len(qrels_df)}")
 
 # 2. BM25
