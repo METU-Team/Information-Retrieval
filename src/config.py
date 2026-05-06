@@ -9,18 +9,19 @@ PASSAGE_IDS_PATH = os.path.join(EMBEDDINGS_DIR, "passage_ids.npy")
 
 # Dataset
 CORPUS_DATASET = "msmarco-passage"           # full passage collection
-EVAL_DATASET   = "msmarco-passage/dev/small" # standard eval split with qrels
-CORPUS_SUBSET_SIZE = 500_000   # number of passages to index (increase if you have resources)
-QUERIES_SUBSET_SIZE = 500      # number of queries for evaluation
+EVAL_DATASET   = "msmarco-passage/dev/small" # standard eval split with qrels (binary)
+TREC_DL_DATASET = "msmarco-passage/trec-dl-2019/judged"  # graded relevance (0-3)
+CORPUS_SUBSET_SIZE = 200_000   # number of passages to index (increase if you have resources)
+QUERIES_SUBSET_SIZE = 1000    # number of queries for evaluation
 
 # Models
 BIENCODER_MODEL = "sentence-transformers/msmarco-distilbert-base-v3"
 CROSSENCODER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
 # Retrieval parameters
-BM25_TOP_K = 10         # candidates from BM25
-DENSE_TOP_K = 10         # candidates from dense retrieval
-RERANK_TOP_K = 10        # candidates to send to re-ranker
+BM25_TOP_K = 100         # candidates from BM25
+DENSE_TOP_K = 100        # candidates from dense retrieval
+RERANK_TOP_K = 100       # candidates to send to re-ranker
 FINAL_TOP_K = 10          # final results to return
 
 # Evaluation

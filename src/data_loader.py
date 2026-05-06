@@ -7,7 +7,10 @@ scores are not artificially deflated by missing ground-truth documents.
 """
 import ir_datasets
 import pandas as pd
-from src.config import CORPUS_DATASET, EVAL_DATASET, CORPUS_SUBSET_SIZE, QUERIES_SUBSET_SIZE
+from src.config import (
+    CORPUS_DATASET, EVAL_DATASET, TREC_DL_DATASET,
+    CORPUS_SUBSET_SIZE, QUERIES_SUBSET_SIZE,
+)
 
 
 def load_queries_and_qrels(n_queries: int = QUERIES_SUBSET_SIZE):
@@ -91,3 +94,39 @@ def load_corpus(qrels_df: pd.DataFrame = None, subset_size: int = CORPUS_SUBSET_
                 break
             rows.append({"docno": str(doc.doc_id), "text": doc.text})
         return pd.DataFrame(rows)
+
+
+def load_trec_dl_queries_and_qrels():
+    """
+    Load TREC Deep Learning 2019 queries and graded relevance judgments.
+
+    Same MS MARCO passage corpus, but with NIST-assessor relevance labels:
+        0 = Irrelevant
+        1 = Related
+        2 = Highly relevant
+        3 = Perfectly relevant
+
+    Returns:
+        queries_df: DataFrame with columns ['qid', 'query']
+        qrels_df:   DataFrame with columns ['qid', 'docno', 'label']
+    ~43 judged queries (all queries have graded qrels).
+    """
+    dataset = ir_datasets.load(TREC_DL_DATASET)
+
+    queries = []
+    for q in dataset.queries_iter():
+        queries.append({"qid": str(q.query_id), "query": q.text})
+
+    qrels = []
+    for qrel in dataset.qrels_iter():
+        qrels.append({
+            "qid": str(qrel.query_id),
+            "docno": str(qrel.doc_id),
+            "label": int(qrel.relevance),
+        })
+
+    queries_df = pd.DataFrame(queries)
+    qrels_df = pd.DataFrame(qrels)
+    print(f"TREC-DL 2019: {len(queries_df)} queries, {len(qrels_df)} qrels "
+          f"(relevance levels: {sorted(qrels_df['label'].unique())})")
+    return queries_df, qrels_df
