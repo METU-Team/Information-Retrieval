@@ -8,6 +8,7 @@ Preprocessing steps applied:
   - positional index (supports phrase queries in the future)
 """
 import os
+import re
 import pyterrier as pt
 import pandas as pd
 from src.config import INDEX_DIR, BM25_TOP_K
@@ -47,9 +48,19 @@ def get_bm25_retriever(index_ref: pt.IndexRef, top_k: int = BM25_TOP_K) -> pt.Ba
     )
 
 
+def _sanitize_query(text: str) -> str:
+    """Strip Terrier query-language operators so raw text is treated as plain keywords.
+    Characters like ':' would otherwise be parsed as field operators (e.g. 'anxiety: definition'
+    is read as 'search field anxiety for definition'), causing a crash when the index has no fields.
+    """
+    return re.sub(r'[:\+\-\(\)\^\~\*\?\\\/\{\}\[\]"!]', ' ', text)
+
+
 def retrieve(retriever: pt.BatchRetrieve, queries_df: pd.DataFrame) -> pd.DataFrame:
     """
     queries_df must have columns: ['qid', 'query']
     Returns a results DataFrame with columns: ['qid', 'docno', 'score', 'rank']
     """
-    return retriever.transform(queries_df)
+    sanitized = queries_df.copy()
+    sanitized["query"] = sanitized["query"].apply(_sanitize_query)
+    return retriever.transform(sanitized)
