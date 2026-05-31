@@ -5,6 +5,7 @@ Model: msmarco-distilbert-base-v3
   - Trained on MS MARCO with dot-product similarity
   - Use dot_score / inner product (IndexFlatIP), NOT cosine after L2-norm
 """
+import gc
 import os
 import numpy as np
 import faiss
@@ -17,6 +18,10 @@ from src.config import (
     EMBEDDING_DIM, FAISS_BATCH_SIZE, DEVICE, DENSE_TOP_K
 )
 
+# Number of passages to encode before flushing to FAISS index.
+# 50K × 768 × 4 bytes ≈ 150 MB per chunk — safe for most machines.
+ENCODE_CHUNK_SIZE = 50_000
+
 
 def load_biencoder() -> SentenceTransformer:
     model = SentenceTransformer(BIENCODER_MODEL, device=DEVICE)
@@ -27,32 +32,54 @@ def encode_corpus(
     model: SentenceTransformer,
     corpus_df: pd.DataFrame,
     batch_size: int = FAISS_BATCH_SIZE,
-    save: bool = True
-) -> tuple[np.ndarray, list]:
+    chunk_size: int = ENCODE_CHUNK_SIZE,
+    save: bool = True,
+) -> None:
     """
-    Encodes all passages. Returns (embeddings_matrix, passage_ids_list).
-    Saves to disk if save=True.
+    Encode all passages in chunks and build the FAISS index incrementally.
+
+    Instead of materializing all embeddings in RAM at once (which causes OOM
+    on large corpora), we encode `chunk_size` passages at a time, add them
+    to the FAISS index immediately, and free the chunk memory.
+
+    Peak RAM ≈ model + 1 chunk of embeddings (instead of full corpus).
     """
     os.makedirs(os.path.dirname(FAISS_INDEX_PATH), exist_ok=True)
     texts = corpus_df["text"].tolist()
     passage_ids = corpus_df["docno"].tolist()
+    n = len(texts)
 
-    embeddings = model.encode(
-        texts,
-        batch_size=batch_size,
-        show_progress_bar=True,
-        convert_to_numpy=True,
-        normalize_embeddings=False,  # msmarco-distilbert uses dot product, not cosine
-    )
+    # Save passage IDs upfront
+    np.save(PASSAGE_IDS_PATH, np.array(passage_ids))
+
+    # Create an empty FAISS index
+    index = faiss.IndexFlatIP(EMBEDDING_DIM)
+
+    # Encode and add in chunks
+    for start in tqdm(range(0, n, chunk_size), desc="Encoding chunks"):
+        end = min(start + chunk_size, n)
+        chunk_texts = texts[start:end]
+
+        chunk_emb = model.encode(
+            chunk_texts,
+            batch_size=batch_size,
+            show_progress_bar=False,
+            convert_to_numpy=True,
+            normalize_embeddings=False,
+        ).astype("float32")
+
+        index.add(chunk_emb)
+
+        # Free chunk memory
+        del chunk_emb
+        gc.collect()
+        if DEVICE == "cuda":
+            torch.cuda.empty_cache()
 
     if save:
-        np.save(PASSAGE_IDS_PATH, np.array(passage_ids))
-        index = faiss.IndexFlatIP(EMBEDDING_DIM)
-        index.add(embeddings.astype("float32"))
         faiss.write_index(index, FAISS_INDEX_PATH)
-        print(f"FAISS index saved: {index.ntotal} vectors")
 
-    return embeddings, passage_ids
+    print(f"FAISS index saved: {index.ntotal} vectors")
 
 
 def load_faiss_index():
