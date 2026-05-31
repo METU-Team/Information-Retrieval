@@ -98,7 +98,10 @@ def evaluate_all_ir_measures(results_dict: dict, qrels_df: pd.DataFrame) -> pd.D
             **{str(m): round(v, 4) for m, v in agg.items()},
         })
 
-    return pd.DataFrame(rows)
+    df = pd.DataFrame(rows)
+    if "RR@10" in df.columns:
+        df = df.rename(columns={"RR@10": "MRR@10"})
+    return df[["System", "MRR@10", "nDCG@10"]]
 
 
 def evaluate_trec_dl(results_dict: dict, qrels_df: pd.DataFrame) -> pd.DataFrame:
@@ -140,4 +143,7 @@ def evaluate_trec_dl(results_dict: dict, qrels_df: pd.DataFrame) -> pd.DataFrame
             **{str(m): round(v, 4) for m, v in agg.items()},
         })
 
-    return pd.DataFrame(rows)
+    df = pd.DataFrame(rows)
+    if "RR(rel=2)@10" in df.columns:
+        df = df.rename(columns={"RR(rel=2)@10": "MRR(rel=2)@10"})
+    return df[["System", "MRR(rel=2)@10", "nDCG@10"]]

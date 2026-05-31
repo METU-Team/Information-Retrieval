@@ -46,7 +46,13 @@ def load_queries_and_qrels(n_queries: int = QUERIES_SUBSET_SIZE):
     # Filter qrels to selected queries only
     filtered_qrels = [qr for qr in all_qrels if qr["qid"] in selected_qids]
 
-    return pd.DataFrame(queries), pd.DataFrame(filtered_qrels)
+    queries_df = pd.DataFrame(queries)
+    qrels_df = pd.DataFrame(filtered_qrels)
+    
+    print(f"MS MARCO Eval: {len(queries_df)} queries, {len(qrels_df)} qrels")
+
+    return queries_df, qrels_df
+
 
 
 def load_corpus(qrels_df: pd.DataFrame = None, subset_size: int = CORPUS_SUBSET_SIZE) -> pd.DataFrame:
@@ -127,6 +133,5 @@ def load_trec_dl_queries_and_qrels():
 
     queries_df = pd.DataFrame(queries)
     qrels_df = pd.DataFrame(qrels)
-    print(f"TREC-DL 2019: {len(queries_df)} queries, {len(qrels_df)} qrels "
-          f"(relevance levels: {sorted(qrels_df['label'].unique())})")
+    print(f"TREC-DL 2019: {len(queries_df)} queries, {len(qrels_df)} qrels")
     return queries_df, qrels_df
