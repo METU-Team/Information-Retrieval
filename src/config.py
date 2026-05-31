@@ -19,7 +19,7 @@ BIENCODER_MODEL = "sentence-transformers/msmarco-distilbert-base-v3"
 CROSSENCODER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
 # Retrieval parameters
-BM25_TOP_K = 100         # candidates from BM25
+BM25_TOP_K = 100        # candidates from BM25
 DENSE_TOP_K = 100        # candidates from dense retrieval
 RERANK_TOP_K = 100       # candidates to send to re-ranker
 FINAL_TOP_K = 10          # final results to return
@@ -30,6 +30,9 @@ METRICS = ["MRR@10", "nDCG@10"]
 # FAISS
 EMBEDDING_DIM = 768        # msmarco-distilbert-base-v3 output dim
 FAISS_BATCH_SIZE = 64
+
+# Fusion
+CC_ALPHA = 0.75 # for convex combination
 
 # Device
 import torch

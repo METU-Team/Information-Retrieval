@@ -25,7 +25,7 @@ if not pt.started():
 from src.config import INDEX_DIR, FAISS_INDEX_PATH, FINAL_TOP_K
 from src.bm25_retriever import load_index, get_bm25_retriever, retrieve
 from src.dense_retriever import load_biencoder, load_faiss_index, dense_retrieve
-from src.hybrid_retriever import reciprocal_rank_fusion
+from src.hybrid_retriever import convex_combination
 from src.reranker import load_crossencoder, rerank
 from src.data_loader import load_corpus, load_queries_and_qrels, load_trec_dl_queries_and_qrels
 
@@ -139,7 +139,7 @@ with st.sidebar:
     st.markdown("## ⚙️ Pipeline Settings")
     pipeline = st.selectbox(
         "Retrieval pipeline",
-        ["BM25 Only", "Dense Only", "Hybrid (RRF)", "Hybrid + Cross-Encoder"],
+        ["BM25 Only", "Dense Only", "Hybrid (CC)", "Hybrid (CC) + Cross-Encoder"],
         index=3,
     )
     top_k = st.slider("Results to display", 5, 50, FINAL_TOP_K)
@@ -148,7 +148,7 @@ with st.sidebar:
     **Pipeline stages:**
     1. 🔤 **BM25** — lexical matching
     2. 🧠 **Dense** — semantic bi-encoder
-    3. 🔀 **RRF** — rank fusion
+    3. 🔀 **Convex Combination** — score fusion
     4. 🎯 **Cross-Encoder** — neural re-ranking
     """)
 
@@ -169,14 +169,14 @@ if query:
     timings = {}
 
     # BM25
-    if pipeline in ["BM25 Only", "Hybrid (RRF)", "Hybrid + Cross-Encoder"]:
+    if pipeline in ["BM25 Only", "Hybrid (CC)", "Hybrid (CC) + Cross-Encoder"]:
         bm25_retriever = _load_bm25()
         t0 = time.time()
         bm25_results = retrieve(bm25_retriever, query_df)
         timings["BM25"] = time.time() - t0
 
     # Dense
-    if pipeline in ["Dense Only", "Hybrid (RRF)", "Hybrid + Cross-Encoder"]:
+    if pipeline in ["Dense Only", "Hybrid (CC)", "Hybrid (CC) + Cross-Encoder"]:
         bi_model, faiss_idx, passage_ids = _load_dense()
         t0 = time.time()
         dense_results = dense_retrieve(bi_model, faiss_idx, passage_ids, query_df)
@@ -187,14 +187,14 @@ if query:
         final_results = bm25_results.head(top_k)
     elif pipeline == "Dense Only":
         final_results = dense_results.head(top_k)
-    elif pipeline == "Hybrid (RRF)":
+    elif pipeline == "Hybrid (CC)":
         t0 = time.time()
-        final_results = reciprocal_rank_fusion([bm25_results, dense_results], top_n=top_k)
-        timings["RRF"] = time.time() - t0
-    elif pipeline == "Hybrid + Cross-Encoder":
+        final_results = convex_combination(bm25_results, dense_results, top_n=top_k)
+        timings["CC Fusion"] = time.time() - t0
+    elif pipeline == "Hybrid (CC) + Cross-Encoder":
         t0 = time.time()
-        hybrid_results = reciprocal_rank_fusion([bm25_results, dense_results], top_n=100)
-        timings["RRF"] = time.time() - t0
+        hybrid_results = convex_combination(bm25_results, dense_results, top_n=100)
+        timings["CC Fusion"] = time.time() - t0
 
         corpus_df = _load_corpus()
         cross_model = _load_crossencoder()

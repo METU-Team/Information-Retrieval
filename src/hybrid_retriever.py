@@ -1,15 +1,17 @@
 """
 Hybrid retrieval: merges BM25 and Dense retrieval candidate lists.
 
-Implements Reciprocal Rank Fusion (RRF), the standard approach for
-combining ranked lists from heterogeneous retrieval systems without
-requiring score normalization.
+Implements two fusion strategies:
 
-Reference: Cormack, Clarke & Buettcher (2009) — "Reciprocal Rank Fusion
-outperforms Condorcet and individual Rank Learning Methods"
+1. Reciprocal Rank Fusion (RRF) — rank-based, no score normalization needed.
+   Reference: Cormack, Clarke & Buettcher (2009) — "Reciprocal Rank Fusion
+   outperforms Condorcet and individual Rank Learning Methods"
+
+2. Convex Combination (CC) — score-based linear interpolation with min-max
+   normalization.  alpha * dense + (1 - alpha) * sparse.
 """
 import pandas as pd
-from src.config import RERANK_TOP_K
+from src.config import RERANK_TOP_K , CC_ALPHA
 
 
 def reciprocal_rank_fusion(
@@ -54,6 +56,77 @@ def reciprocal_rank_fusion(
     
     result = (
         result.sort_values(["qid", "score"], ascending=[True, False])
+        .groupby("qid")
+        .head(top_n)
+        .reset_index(drop=True)
+    )
+    result["rank"] = result.groupby("qid").cumcount()
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Convex Combination (weighted linear interpolation)
+# ---------------------------------------------------------------------------
+
+def _minmax_normalize(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Min-max normalize scores to [0, 1] **per query**.
+    """
+    out = df.copy()
+    for qid, group in out.groupby("qid"):
+        lo = group["score"].min()
+        hi = group["score"].max()
+        rng = hi - lo
+        if rng > 0:
+            out.loc[group.index, "score"] = (group["score"] - lo) / rng
+        else:
+            out.loc[group.index, "score"] = 0.0
+    return out
+
+
+def convex_combination(
+    sparse_df: pd.DataFrame,
+    dense_df: pd.DataFrame,
+    alpha: float = CC_ALPHA,
+    top_n: int = RERANK_TOP_K,
+) -> pd.DataFrame:
+    """
+    Convex Combination (CC) — score-level fusion.
+
+    final_score(d) = alpha * norm_dense(d) + (1 - alpha) * norm_sparse(d)
+
+    Documents retrieved by only one system get 0 for the missing system's
+    normalized score (outer join).
+
+    Args:
+        sparse_df: BM25 results DataFrame ['qid', 'docno', 'score', 'rank']
+        dense_df:  Dense results DataFrame ['qid', 'docno', 'score', 'rank']
+        alpha: weight for the dense component (0 = pure sparse, 1 = pure dense)
+        top_n: number of results to return per query
+
+    Returns:
+        Fused DataFrame with columns ['qid', 'docno', 'score', 'rank']
+    """
+    # Normalize each system's scores per query
+    sparse_norm = _minmax_normalize(sparse_df)[["qid", "docno", "score"]].rename(
+        columns={"score": "score_sparse"}
+    )
+    dense_norm = _minmax_normalize(dense_df)[["qid", "docno", "score"]].rename(
+        columns={"score": "score_dense"}
+    )
+
+    # Outer join — docs found by only one system get 0 for the other
+    merged = pd.merge(sparse_norm, dense_norm, on=["qid", "docno"], how="outer")
+    merged["score_sparse"] = merged["score_sparse"].fillna(0.0)
+    merged["score_dense"] = merged["score_dense"].fillna(0.0)
+
+    # Weighted linear combination
+    merged["score"] = alpha * merged["score_dense"] + (1 - alpha) * merged["score_sparse"]
+
+    # Keep top_n per query
+    result = (
+        merged[["qid", "docno", "score"]]
+        .sort_values(["qid", "score"], ascending=[True, False])
         .groupby("qid")
         .head(top_n)
         .reset_index(drop=True)

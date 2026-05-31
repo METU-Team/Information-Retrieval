@@ -4,7 +4,7 @@ import pyterrier as pt
 from src.data_loader import load_corpus, load_queries_and_qrels, load_trec_dl_queries_and_qrels
 from src.bm25_retriever import build_index, load_index, get_bm25_retriever, retrieve
 from src.dense_retriever import load_biencoder, encode_corpus, load_faiss_index, dense_retrieve
-from src.hybrid_retriever import reciprocal_rank_fusion
+from src.hybrid_retriever import reciprocal_rank_fusion, convex_combination
 from src.reranker import load_crossencoder, rerank
 from src.evaluate import evaluate_all, evaluate_all_ir_measures, evaluate_trec_dl
 from src.config import INDEX_DIR, FAISS_INDEX_PATH
@@ -58,31 +58,56 @@ faiss_idx, passage_ids = load_faiss_index()
 dense_results = dense_retrieve(bi_model, faiss_idx, passage_ids, queries_df)
 print(f"Dense done. Sample:\n{dense_results.head(3)}")
 
-# 4. Hybrid Retrieval
-print("\n--- Phase 4: Hybrid Retrieval (RRF) ---")
-hybrid_results = reciprocal_rank_fusion([bm25_results, dense_results])
-print(f"Hybrid done. Sample:\n{hybrid_results.head(3)}")
+# 4. Hybrid Retrieval — RRF
+print("\n--- Phase 4a: Hybrid Retrieval (RRF) ---")
+hybrid_rrf_results = reciprocal_rank_fusion([bm25_results, dense_results])
+print(f"Hybrid RRF done. Sample:\n{hybrid_rrf_results.head(3)}")
 
-# 5. Cross-Encoder Re-Ranking
+# 4b. Hybrid Retrieval — Convex Combination
+print("\n--- Phase 4b: Hybrid Retrieval (Convex Combination) ---")
+hybrid_cc_results = convex_combination(bm25_results, dense_results)
+print(f"Hybrid CC done. Sample:\n{hybrid_cc_results.head(3)}")
+
+# 5. Cross-Encoder Re-Ranking (on multiple candidate pools)
 print("\n--- Phase 5: Cross-Encoder Re-Ranking ---")
 cross_model = load_crossencoder()
-reranked_results = rerank(cross_model, hybrid_results, queries_df, corpus_df)
-print(f"Re-ranking done. Sample:\n{reranked_results.head(3)}")
+
+# 5a. BM25 + CE
+print("  Re-ranking BM25 candidates...")
+bm25_ce_results = rerank(cross_model, bm25_results, queries_df, corpus_df)
+
+# 5b. Dense + CE
+print("  Re-ranking Dense candidates...")
+dense_ce_results = rerank(cross_model, dense_results, queries_df, corpus_df)
+
+# 5c. Hybrid RRF + CE
+print("  Re-ranking Hybrid RRF candidates...")
+hybrid_rrf_ce_results = rerank(cross_model, hybrid_rrf_results, queries_df, corpus_df)
+
+# 5d. Hybrid CC + CE
+print("  Re-ranking Hybrid CC candidates...")
+hybrid_cc_ce_results = rerank(cross_model, hybrid_cc_results, queries_df, corpus_df)
+
+print("Re-ranking done.")
 
 # 6. Evaluate — MS MARCO dev/small (binary relevance)
 results_dict = {
-    "BM25_Baseline": bm25_results, 
-    "Dense_BiEncoder": dense_results,
-    "Hybrid_RRF": hybrid_results,
-    "Hybrid_RRF+CE": reranked_results,
+    "BM25":           bm25_results,
+    "Dense":          dense_results,
+    "Hybrid_RRF":     hybrid_rrf_results,
+    "Hybrid_CC":      hybrid_cc_results,
+    "BM25+CE":        bm25_ce_results,
+    "Dense+CE":       dense_ce_results,
+    "Hybrid_RRF+CE":  hybrid_rrf_ce_results,
+    "Hybrid_CC+CE":   hybrid_cc_ce_results,
 }
 
-print("\n--- Phase 6a: Evaluation (Custom) ---")
+"""print("\n--- Phase 6a: Evaluation (Custom) ---")
 summary = evaluate_all(results_dict, qrels_df)
 print("\n=== RESULTS (Custom) ===")
 print(summary.to_string(index=False))
-
-print("\n--- Phase 6b: Evaluation (ir_measures / trec_eval-compatible) ---")
+"""
+print("\n--- Phase 6: Evaluation (ir_measures / trec_eval-compatible) ---")
 summary_ir = evaluate_all_ir_measures(results_dict, qrels_df)
 print("\n=== RESULTS (ir_measures — MS MARCO Binary) ===")
 print(summary_ir.to_string(index=False))
@@ -91,14 +116,23 @@ print(summary_ir.to_string(index=False))
 print("\n--- Phase 7: TREC-DL 2019 Evaluation (Graded Relevance) ---")
 bm25_results_dl = retrieve(bm25_retriever, trec_dl_queries)
 dense_results_dl = dense_retrieve(bi_model, faiss_idx, passage_ids, trec_dl_queries)
-hybrid_results_dl = reciprocal_rank_fusion([bm25_results_dl, dense_results_dl])
-reranked_results_dl = rerank(cross_model, hybrid_results_dl, trec_dl_queries, corpus_df)
+hybrid_rrf_results_dl = reciprocal_rank_fusion([bm25_results_dl, dense_results_dl])
+hybrid_cc_results_dl = convex_combination(bm25_results_dl, dense_results_dl)
+
+bm25_ce_results_dl = rerank(cross_model, bm25_results_dl, trec_dl_queries, corpus_df)
+dense_ce_results_dl = rerank(cross_model, dense_results_dl, trec_dl_queries, corpus_df)
+hybrid_rrf_ce_results_dl = rerank(cross_model, hybrid_rrf_results_dl, trec_dl_queries, corpus_df)
+hybrid_cc_ce_results_dl = rerank(cross_model, hybrid_cc_results_dl, trec_dl_queries, corpus_df)
 
 trec_dl_dict = {
-    "BM25_Baseline": bm25_results_dl, 
-    "Dense_BiEncoder": dense_results_dl,
-    "Hybrid_RRF": hybrid_results_dl,
-    "Hybrid_RRF+CE": reranked_results_dl,
+    "BM25":           bm25_results_dl,
+    "Dense":          dense_results_dl,
+    "Hybrid_RRF":     hybrid_rrf_results_dl,
+    "Hybrid_CC":      hybrid_cc_results_dl,
+    "BM25+CE":        bm25_ce_results_dl,
+    "Dense+CE":       dense_ce_results_dl,
+    "Hybrid_RRF+CE":  hybrid_rrf_ce_results_dl,
+    "Hybrid_CC+CE":   hybrid_cc_ce_results_dl,
 }
 summary_dl = evaluate_trec_dl(trec_dl_dict, trec_dl_qrels)
 print("\n=== RESULTS (TREC-DL 2019 — Graded) ===")
