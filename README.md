@@ -52,8 +52,8 @@ All metrics are computed using `ir_measures` (trec_eval-compatible). The corpus 
 | Hybrid CC (α=0.75) | 0.6164 | 0.6584 |
 | BM25+CE | 0.6849 | 0.7135 |
 | Dense+CE | 0.7126 | 0.7475 |
-| Hybrid RRF+CE | 0.7201 | 0.7566 |
-| **Hybrid CC+CE** | **0.7197** | **0.7563** |
+| Hybrid RRF+CE | 0.7197 | 0.7563 |
+| **Hybrid CC+CE** | **0.7201** | **0.7566** |
 
 ### TREC Deep Learning 2019 — Graded Relevance (0–3 scale, ~43 queries)
 
@@ -65,8 +65,8 @@ All metrics are computed using `ir_measures` (trec_eval-compatible). The corpus 
 | Hybrid CC (α=0.75) | 0.9018 | 0.7576 |
 | BM25+CE | 0.9089 | 0.7798 |
 | Dense+CE | 0.9205 | 0.7980 |
-| Hybrid RRF+CE | 0.9205 | 0.8120 |
-| **Hybrid CC+CE** | **0.9205** | **0.8108** |
+| Hybrid RRF+CE | 0.9205 | 0.8108 |
+| **Hybrid CC+CE** | **0.9205** | **0.8120** |
 
 ### Key Findings
 
